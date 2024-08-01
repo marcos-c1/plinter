@@ -8,10 +8,13 @@
 #include <map>
 #include <unordered_map>
 
+#define DEBUG 1
 #define MAX_NAME_LENGTH 128
 #define MAX_BLOB 200.000.000 // 200MB
 typedef uint8_t Byte;
-std::string EXPR = "(6+3) - 2"; // error
+std::string EXPR =
+    "CREATE OR REPLACE PACKAGE pkg1 AS TYPE numset_t IS TABLE OF NUMBER;  "
+    "FUNCTION f1(x NUMBER) RETURN numset_t PIPELINED; END pkg1;";
 
 enum TokenType {
   // Empty Space
@@ -42,7 +45,6 @@ enum TokenType {
 
   // Literals.
   IDENTIFIER,
-
   // Reserved Words
   ALL,
   ALTER,
@@ -190,7 +192,7 @@ enum TokenType {
   CONVERT,
   COUNT,
   CREDENTIAL,
-  position,
+  CURRENT,
   CUSTOMDATUM,
 
   DANGLING,
@@ -493,10 +495,461 @@ enum TokenType {
   UNDEFINED,
 };
 
-// TODO: use an hashmap to map the keyword value or an enum as subset of
-// TokenType?
 const std::unordered_map<std::string, TokenType> KEYWORD_MAPPER = {
+    // Reserved words
+    {"all", ALL},
+    {"alter", ALTER},
+    {"and", AND},
+    {"any", ANY},
+    {"as", AS},
+    {"asc", ASC},
+    {"at", AT},
 
+    {"begin", BEGIN},
+    {"between", BETWEEN},
+    {"by", BY},
+
+    {"case", CASE},
+    {"check", CHECK},
+    {"clusters", CLUSTERS},
+    {"cluster", CLUSTER},
+    {"colauth", COLAUTH},
+    {"columns", COLUMNS},
+    {"compress", COMPRESS},
+    {"connect", CONNECT},
+    {"crash", CRASH},
+    {"create", CREATE},
+    {"cursor", CURSOR},
+
+    {"declare", DECLARE},
+    {"default", DEFAULT},
+    {"desc", DESC},
+    {"distinct", DISTINCT},
+    {"drop", DROP},
+
+    {"else", ELSE},
+    {"end", END},
+    {"exception", EXCEPTION},
+    {"exclusive", EXCLUSIVE},
+
+    {"fetch", FETCH},
+    {"for", FOR},
+    {"from", FROM},
+    {"function", FUNCTION},
+
+    {"goto", GOTO},
+    {"grant", GRANT},
+    {"group", GROUP},
+
+    {"having", HAVING},
+
+    {"identified", IDENTIFIED},
+    {"if", IF},
+    {"in", IN},
+    {"index", INDEX},
+    {"indexes", INDEXES},
+    {"insert", INSERT},
+    {"intersect", INTERSECT},
+    {"into", INTO},
+    {"is", IS},
+
+    {"like", LIKE},
+    {"lock", LOCK},
+    {"minus_", MINUS_},
+    {"mode", MODE},
+
+    {"nocompress", NOCOMPRESS},
+    {"not", NOT},
+    {"nowait", NOWAIT},
+    {"null_", NULL_},
+    {"of", OF},
+    {"on", ON},
+    {"option", OPTION},
+    {"or", OR},
+    {"order", ORDER},
+    {"overlaps", OVERLAPS},
+
+    {"procedure", PROCEDURE},
+    {"public", PUBLIC},
+
+    {"resource", RESOURCE},
+    {"revoke", REVOKE},
+
+    {"select", SELECT},
+    {"share", SHARE},
+    {"size", SIZE},
+    {"sql", SQL},
+    {"start", START},
+    {"subtype", SUBTYPE},
+
+    {"tabauth", TABAUTH},
+    {"table", TABLE},
+    {"then", THEN},
+    {"to", TO},
+    {"type", TYPE},
+
+    {"union", UNION},
+    {"unique", UNIQUE},
+    {"update", UPDATE},
+
+    {"values", VALUES},
+    {"view", VIEW},
+    {"views", VIEWS},
+
+    {"when", WHEN},
+    {"where", WHERE},
+    {"with", WITH},
+
+    // KEYWORDS
+    {"add", ADD},
+    {"accessible", ACCESSIBLE},
+    {"agent", AGENT},
+    {"aggregate", AGGREGATE},
+    {"array", ARRAY},
+    {"attribute", ATTRIBUTE},
+    {"authid", AUTHID},
+    {"avg", AVG},
+
+    {"bfile_base", BFILE_BASE},
+    {"binary", BINARY},
+    {"blob_base", BLOB_BASE},
+    {"block", BLOCK},
+    {"body", BODY},
+    {"both", BOTH},
+    {"bound", BOUND},
+    {"bulk", BULK},
+    {"byte", BYTE},
+
+    {"c", C},
+    {"call", CALL},
+    {"calling", CALLING},
+    {"cascade", CASCADE},
+    {"char_base", CHAR_BASE},
+    {"charset", CHARSET},
+    {"charsetform", CHARSETFORM},
+    {"charsetid", CHARSETID},
+    {"clob_base", CLOB_BASE},
+    {"clone", CLONE},
+    {"close", CLOSE},
+    {"collect", COLLECT},
+    {"comment", COMMENT},
+    {"commit", COMMIT},
+    {"committed", COMMITTED},
+    {"compiled", COMPILED},
+    {"constant", CONSTANT},
+    {"constructor", CONSTRUCTOR},
+    {"context", CONTEXT},
+    {"continue", CONTINUE},
+    {"convert", CONVERT},
+    {"count", COUNT},
+    {"credential", CREDENTIAL},
+    {"current", CURRENT},
+    {"customdatum", CUSTOMDATUM},
+
+    {"dangling", DANGLING},
+    {"data", DATA},
+    {"date_base", DATE_BASE},
+    {"day", DAY},
+    {"define", DEFINE},
+    {"delete", DELETE},
+    {"deterministic", DETERMINISTIC},
+    {"directory", DIRECTORY},
+    {"double", DOUBLE},
+    {"duration", DURATION},
+
+    {"element", ELEMENT},
+    {"elsif", ELSIF},
+    {"empty", EMPTY},
+    {"escape", ESCAPE},
+    {"except", EXCEPT},
+    {"exceptions", EXCEPTIONS},
+    {"execute", EXECUTE},
+    {"exists", EXISTS},
+    {"exit", EXIT},
+    {"external", EXTERNAL},
+
+    {"final", FINAL},
+    {"first", FIRST},
+    {"fixed", FIXED},
+    {"forall", FORALL},
+    {"force", FORCE},
+
+    {"general", GENERAL},
+
+    {"hash", HASH},
+    {"heap", HEAP},
+    {"hidden", HIDDEN},
+    {"hour", HOUR},
+
+    {"immediate", IMMEDIATE},
+    {"including", INCLUDING},
+    {"indicator", INDICATOR},
+    {"indices", INDICES},
+    {"infinite", INFINITE},
+    {"instantiable", INSTANTIABLE},
+    {"interface", INTERFACE},
+    {"interval", INTERVAL},
+    {"invalidate", INVALIDATE},
+    {"isolation", ISOLATION},
+
+    {"java", JAVA},
+
+    {"language", LANGUAGE},
+    {"large", LARGE},
+    {"leading", LEADING},
+    {"length", LENGTH},
+    {"level", LEVEL},
+    {"library", LIBRARY},
+    {"like2", LIKE2},
+    {"like4", LIKE4},
+    {"likec", LIKEC},
+    {"limit", LIMIT},
+    {"limited", LIMITED},
+    {"local", LOCAL},
+    {"loop", LOOP},
+
+    {"map", MAP},
+    {"max", MAX},
+    {"maxlen", MAXLEN},
+    {"member", MEMBER},
+    {"merge", MERGE},
+    {"min", MIN},
+    {"minute", MINUTE},
+    {"mod", MOD},
+    {"modify", MODIFY},
+    {"month", MONTH},
+    {"multiset", MULTISET},
+
+    {"name", NAME},
+    {"nan", NAN},
+    {"national", NATIONAL},
+    {"native", NATIVE},
+    {"nchar", NCHAR},
+    {"new", NEW},
+    {"nocopy", NOCOPY},
+    {"number_base", NUMBER_BASE},
+
+    {"object", OBJECT},
+    {"ocicoll", OCICOLL},
+    {"ocidate", OCIDATE},
+    {"ocidatetime", OCIDATETIME},
+    {"ociduration", OCIDURATION},
+    {"ociinterval", OCIINTERVAL},
+    {"ociloblocator", OCILOBLOCATOR},
+    {"ocinumber", OCINUMBER},
+    {"ociraw", OCIRAW},
+    {"ociref", OCIREF},
+    {"ocirefcursor", OCIREFCURSOR},
+    {"ocirowid", OCIROWID},
+    {"ocistring", OCISTRING},
+    {"ocitype", OCITYPE},
+    {"old", OLD},
+    {"only", ONLY},
+    {"opaque", OPAQUE},
+    {"open", OPEN},
+    {"operator", OPERATOR},
+    {"oracle", ORACLE},
+    {"oradata", ORADATA},
+    {"organization", ORGANIZATION},
+    {"orlany", ORLANY},
+    {"orlvary", ORLVARY},
+    {"others", OTHERS},
+    {"out", OUT},
+    {"overriding", OVERRIDING},
+
+    {"package", PACKAGE},
+    {"parallel_enable", PARALLEL_ENABLE},
+    {"parameter", PARAMETER},
+    {"parameters", PARAMETERS},
+    {"parent", PARENT},
+    {"partition", PARTITION},
+    {"pascal", PASCAL},
+    {"persistable", PERSISTABLE},
+    {"pipe", PIPE},
+    {"pipelined", PIPELINED},
+    {"pluggable", PLUGGABLE},
+    {"polymorphic", POLYMORPHIC},
+    {"pragma", PRAGMA},
+    {"precision", PRECISION},
+    {"prior", PRIOR},
+    {"private", PRIVATE},
+
+    {"raise", RAISE},
+    {"range", RANGE},
+    {"read", READ},
+    {"record", RECORD},
+    {"ref", REF},
+    {"reference", REFERENCE},
+    {"relies_on", RELIES_ON},
+    {"rem", REM},
+    {"remainder", REMAINDER},
+    {"rename", RENAME},
+    {"result", RESULT},
+    {"result_cache", RESULT_CACHE},
+    {"return", RETURN},
+    {"returning", RETURNING},
+    {"reverse", REVERSE},
+    {"rollback", ROLLBACK},
+    {"row", ROW},
+
+    {"sample", SAMPLE},
+    {"save", SAVE},
+    {"savepoint", SAVEPOINT},
+    {"sb1", SB1},
+    {"sb2", SB2},
+    {"sb4", SB4},
+    {"second", SECOND},
+    {"segment", SEGMENT},
+    {"self", SELF},
+    {"separate", SEPARATE},
+    {"sequence", SEQUENCE},
+    {"serializable", SERIALIZABLE},
+    {"set", SET},
+    {"short", SHORT},
+    {"size_t", SIZE_T},
+    {"some", SOME},
+    {"sparse", SPARSE},
+    {"sqlcode", SQLCODE},
+    {"sqldata", SQLDATA},
+    {"sqlname", SQLNAME},
+    {"sqlstate", SQLSTATE},
+    {"standard", STANDARD},
+    {"static", STATIC},
+    {"stddev", STDDEV},
+    {"stored", STORED},
+    {"struct", STRUCT},
+    {"style", STYLE},
+    {"submultiset", SUBMULTISET},
+    {"subpartition", SUBPARTITION},
+    {"substitutable", SUBSTITUTABLE},
+    {"sum", SUM},
+    {"synonym", SYNONYM},
+
+    {"tdo", TDO},
+    {"the", THE},
+    {"time", TIME},
+    {"timezone_abbr", TIMEZONE_ABBR},
+    {"timezone_hour", TIMEZONE_HOUR},
+    {"timezone_minute", TIMEZONE_MINUTE},
+    {"timezone_region", TIMEZONE_REGION},
+    {"trailing", TRAILING},
+    {"transaction", TRANSACTION},
+    {"transactional", TRANSACTIONAL},
+    {"trusted", TRUSTED},
+
+    {"ub1", UB1},
+    {"ub2", UB2},
+    {"ub4", UB4},
+    {"under", UNDER},
+    {"unplug", UNPLUG},
+    {"unsigned", UNSIGNED},
+    {"untrusted", UNTRUSTED},
+    {"use", USE},
+    {"using", USING},
+
+    {"valist", VALIST},
+    {"value", VALUE},
+    {"variable", VARIABLE},
+    {"variance", VARIANCE},
+    {"varray", VARRAY},
+    {"varying", VARYING},
+    {"void", VOID},
+
+    {"while", WHILE},
+    {"work", WORK},
+    {"wrapped", WRAPPED},
+    {"write", WRITE},
+
+    {"year", YEAR},
+
+    {"zone", ZONE},
+
+    // PREDEFINED DATA TYPES (LITERALS)
+    {"bfile", BFILE},
+    {"blob", BLOB},
+    {"boolean", BOOLEAN},
+    {"char", CHAR},
+    {"clob", CLOB},
+    {"number", NUMBER},
+    {"date", DATE},
+    {"timestamp", TIMESTAMP},
+
+    // Subtypes of NUMBER Family
+    {"float", FLOAT},       // number(126)
+    {"real", REAL},         // float(63)
+    {"integer", INTEGER},   // number(38, 0)
+    {"int", INT},           // integer
+    {"smallint", SMALLINT}, // number(38, 0)
+    {"decimal", DECIMAL},   // number(38, 0)
+    {"numeric", NUMERIC},   // decimal
+    {"dec", DEC},           // decimal
+    {"binary_integer",
+     BINARY_INTEGER},               // integer range  '-2147483647'..2147483647
+    {"natural", NATURAL},           // binary_integer range 0..2147483647
+    {"naturaln", NATURALN},         // natural not null
+    {"positive", POSITIVE},         // binary_integer range 1..2147483647
+    {"positiven", POSITIVEN},       // positive not null
+    {"signtype", SIGNTYPE},         // binary_integer range '-1'..1
+    {"pls_integer", PLS_INTEGER},   // binary_integer
+    {"binary_float", BINARY_FLOAT}, // number
+    {"binary_double", BINARY_DOUBLE},   // number
+    {"simple_integer", SIMPLE_INTEGER}, // binary_integer not null
+    {"simple_float", SIMPLE_FLOAT},     // binary_float not null
+    {"simple_double", SIMPLE_DOUBLE},   // binary_double
+
+    // Subtypes of CHAR Family
+    {"varchar2", VARCHAR2},                   // char_base
+    {"mlslabel", MLSLABEL},                   // char_base
+    {"urowid", UROWID},                       // char_base
+    {"dbms_id", DBMS_ID},                     // varchar2(128)
+    {"dbms_quoted_id", DBMS_QUOTED_ID},       // varchar2(130)
+    {"dbms_id_30", DBMS_ID_30},               // varchar2(30)
+    {"dbms_quoted_id_30", DBMS_QUOTED_ID_30}, // varchar2(32)
+    {"varchar", VARCHAR},                     // varchar2
+    {"string", STRING},                       // varchar2
+    {"long", LONG},                           // varchar2(32760)
+    {"raw", RAW},                             // varchar2
+    {"rowid", ROWID},                         // varchar2(256)
+    {"character", CHARACTER},                 // char
+
+    /* NOT TRAITING THIS SUBTYPES WITH ""
+     * subtype "long raw"           is raw(32760);
+     * subtype "character varying"  is varchar;
+     * subtype "char varying"       is varchar;
+     * subtype "national character" is char character set nchar_cs;
+     * subtype "national char"      is char character set nchar_cs;
+     * subtype "nchar"              is char character set nchar_cs;
+     * subtype "nvarchar2"          is varchar2 character set nchar_cs;
+     */
+
+    // Subtypes of CLOB Family
+    /* not traiting this subtypes with ""
+     * subtype "character large object"          is clob;
+     * subtype "char large object"               is clob;
+     * subtype "national character large object" is clob character set nchar_cs;
+     * subtype "nchar large object"              is clob character set nchar_cs;
+     * subtype "nclob"                           is clob character set nchar_cs;
+     */
+
+    // Subtypes of DATE Family
+
+    /* NOT TRAITING THIS SUBTYPES WITH ""
+     * type "timestamp with time zone"       is new date_base;
+     * type "interval year to month"         is new date_base;
+     * type "interval day to second"         is new date_base;
+     * type "timestamp with local time zone" is new date_base;
+     */
+    {"time_unconstrained", TIME_UNCONSTRAINED},       // time(9);
+    {"time_tz_unconstrained", TIME_TZ_UNCONSTRAINED}, // time(9) with time zone;
+    {"timestamp_unconstrained", TIMESTAMP_UNCONSTRAINED}, // timestamp(9);
+    {"timestamp_tz_unconstrained",
+     TIMESTAMP_TZ_UNCONSTRAINED}, // timestamp(9) with time zone;
+    {"yminterval_unconstrained",
+     YMINTERVAL_UNCONSTRAINED}, // interval year(9) to month;
+    {"dsinterval_unconstrained",
+     DSINTERVAL_UNCONSTRAINED}, // interval day(9) to second (9);
+    {"timestamp_ltz_unconstrained",
+     TIMESTAMP_LTZ_UNCONSTRAINED}, // timestamp(9) with local timezone;
 };
 
 class Token {
@@ -558,8 +1011,6 @@ public:
     enum TokenType type;
     int col = this->position;
     char c = this->eat();
-
-#define DEBUG 1
 
 #if DEBUG
     std::cout << col << ' ' << c << std::endl;
@@ -658,7 +1109,12 @@ public:
         std::string identifier = expr.substr(col, this->position - col);
         std::transform(identifier.begin(), identifier.end(), identifier.begin(),
                        [](unsigned char c) { return std::tolower(c); });
-        type = IDENTIFIER;
+
+        if (KEYWORD_MAPPER.count(identifier)) {
+          type = KEYWORD_MAPPER.at(identifier);
+        } else {
+          type = IDENTIFIER;
+        }
       } else {
         fprintf(stderr, "Unrecognized token: %c\n", c);
         type = UNDEFINED;
@@ -686,7 +1142,9 @@ int main() {
   std::list<Token> tokens;
   Scanner sc(tokens);
   sc.scan(EXPR);
+#if DEBUG
   sc.printTokens();
+#endif
 }
 /* ------------------------------------------------------------------------
  *  PRECEDENCE RULE
