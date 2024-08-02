@@ -1,14 +1,16 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdbool>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <fstream>
 #include <iostream>
 #include <list>
-#include <map>
+#include <sstream>
 #include <unordered_map>
 
-#define DEBUG 1
+#define DEBUG 0
 #define MAX_NAME_LENGTH 128
 #define MAX_BLOB 200.000.000 // 200MB
 typedef uint8_t Byte;
@@ -970,11 +972,14 @@ public:
 class Scanner {
 public:
   std::list<Token> tokens;
+  std::string sourceCode;
   int position;
   int row;
 
-  Scanner(std::list<Token> tokens, int position = 0, int row = 1) {
+  Scanner(std::string sourceCode, std::list<Token> tokens, int position = 0,
+          int row = 1) {
     this->tokens = tokens;
+    this->sourceCode = sourceCode;
     this->position = position;
     this->row = row;
   }
@@ -985,30 +990,30 @@ public:
 
   bool isDigit(char c) { return (c >= '0' && c <= '9'); }
 
-  bool isEOF() { return this->position == EXPR.length(); }
+  bool isEOF() { return this->position == this->sourceCode.length(); }
 
-  char eat() { return EXPR.at(this->position); }
+  char eat() { return sourceCode.at(this->position); }
 
   char peek() {
-    if (this->position + 1 >= EXPR.length())
+    if (this->position + 1 >= sourceCode.size())
       return '\0';
-    return EXPR.at(this->position + 1);
+    return this->sourceCode.at(this->position + 1);
   }
 
-  void scan(std::string expr) {
-    if (expr.empty()) {
+  void scan() {
+    if (this->sourceCode.empty()) {
       fprintf(stderr, "Expression cannot be empty");
     } else {
       while (!isEOF()) {
-        this->tokenizer(expr);
+        this->tokenizer();
       }
     }
   }
 
   // For now, we are looking at a constant expression. But we want to be able to
   // scan the entire file
-  void tokenizer(std::string expr) {
-    enum TokenType type;
+  void tokenizer() {
+    enum TokenType type = UNDEFINED;
     int col = this->position;
     char c = this->eat();
 
@@ -1035,7 +1040,16 @@ public:
       type = DOT;
       break;
     case '-':
-      type = MINUS;
+      if (peek() == '-') {
+        while (this->sourceCode[this->position] != '\n' && !this->isEOF()) {
+          this->position++;
+        }
+        if (this->sourceCode[this->position] == '\n')
+          this->row++;
+
+      } else {
+        type = MINUS;
+      }
       break;
     case '+':
       type = PLUS;
@@ -1058,36 +1072,40 @@ public:
     case '>':
       type = peek() == '=' ? GREATER_EQUAL : GREATER;
       break;
+
     case '/':
-      if (peek() == '/' || peek() == '*') {
-        while (expr[this->position] != '\n' && !this->isEOF())
+      if (peek() == '*') {
+        while (this->sourceCode[this->position] != '*' && !this->isEOF())
           this->position++;
+        if (peek() == '/') {
+
+        } else {
+          type = UNDEFINED;
+        }
       } else {
         type = SLASH;
       }
       break;
     case ' ':
-      type = SPACE;
-      break;
     case '\r':
     case '\t':
-      type = UNDEFINED;
       break;
     case '\n':
       this->row++;
       break;
     case '"':
+      break;
     case '\'':
-      while ((expr[this->position] != '"' || expr[this->position] != '\'') &&
-             !this->isEOF()) {
-        if (expr[this->position] == '\n')
+      while (this->sourceCode[this->position] != '\'' && !isEOF()) {
+        if (this->sourceCode[this->position] == '\n')
           this->row++;
+        if (this->sourceCode[this->position] != '\'')
+          std::cout << this->sourceCode[this->position];
         this->position++;
       }
 
       if (this->isEOF()) {
-        fprintf(stderr, "Unterminated string\n");
-        return;
+        fprintf(stderr, "Unterminated string: \n");
       }
 
       type = STRING;
@@ -1095,7 +1113,7 @@ public:
     default:
       if (isDigit(c)) {
         while (isDigit(peek())) {
-          if (expr[this->position] == '.' && isDigit(peek())) {
+          if (this->sourceCode[this->position] == '.' && isDigit(peek())) {
             // Eat the .
             this->position++;
           }
@@ -1106,7 +1124,8 @@ public:
         while ((isAlpha(peek()) || isDigit(peek())) && !isEOF()) {
           this->position++;
         }
-        std::string identifier = expr.substr(col, this->position - col);
+        std::string identifier =
+            this->sourceCode.substr(col, this->position - col);
         std::transform(identifier.begin(), identifier.end(), identifier.begin(),
                        [](unsigned char c) { return std::tolower(c); });
 
@@ -1123,8 +1142,8 @@ public:
 
     this->position++;
 
-    if (type != UNDEFINED && type != SPACE) {
-      std::string lexemes = expr.substr(col, this->position - col);
+    if (type != UNDEFINED) {
+      std::string lexemes = this->sourceCode.substr(col, this->position - col);
       Token tkn(type, lexemes, this->row, col);
       this->tokens.push_back(tkn);
     }
@@ -1138,13 +1157,20 @@ public:
   }
 };
 
+std::string readFile() {
+  std::ifstream file("input/2.sql");
+  std::stringstream buffer;
+  buffer << file.rdbuf();
+  std::cout << "Buffer length: " << buffer.str().length() << std::endl;
+  return buffer.str();
+}
+
 int main() {
   std::list<Token> tokens;
-  Scanner sc(tokens);
-  sc.scan(EXPR);
-#if DEBUG
+  std::string expr = readFile();
+  Scanner sc(expr, tokens);
+  sc.scan();
   sc.printTokens();
-#endif
 }
 /* ------------------------------------------------------------------------
  *  PRECEDENCE RULE
@@ -1182,3 +1208,5 @@ int main() {
  *    |----------------------|
  *
  */
+
+// AST
